@@ -15,8 +15,8 @@ the next step is to define relations, such as _less than or equal_.
 ```agda
 import Relation.Binary.PropositionalEquality as Eq
 open Eq using (_≡_; refl; cong)
-open import Data.Nat using (ℕ; zero; suc; _+_)
-open import Data.Nat.Properties using (+-comm; +-identityʳ)
+open import Data.Nat using (ℕ; zero; suc; _+_; _*_)
+open import Data.Nat.Properties using (+-comm; +-identityʳ; *-comm)
 ```
 
 
@@ -243,13 +243,17 @@ partial order but not a total order.
 Give an example of a preorder that is not a partial order.
 
 ```agda
--- Your code goes here
+data _<~_ : ℕ → ℕ → Set where
+  z<~n : ∀ {n : ℕ} → zero <~ n
+  s<~s : ∀ {m n : ℕ} → m <~ n → suc m <~ suc n
+  1<~0 : 1 <~ 0
 ```
 
 Give an example of a partial order that is not a total order.
 
 ```agda
--- Your code goes here
+data _<~~_ : ℕ → ℕ → Set where
+  n<~~n : ∀ {n : ℕ} → n <~~ n
 ```
 
 ## Reflexivity
@@ -341,6 +345,7 @@ antisymmetric: for all naturals `m` and `n`, if both `m ≤ n` and
   → m ≡ n
 ≤-antisym z≤n       z≤n        =  refl
 ≤-antisym (s≤s m≤n) (s≤s n≤m)  =  cong suc (≤-antisym m≤n n≤m)
+-- ≤-antisym z≤n (s≤s n≤m) ()
 ```
 Again, the proof is by induction over the evidence that `m ≤ n`
 and `n ≤ m` hold.
@@ -552,7 +557,15 @@ transitivity proves `m + p ≤ n + q`, as was to be shown.
 Show that multiplication is monotonic with regard to inequality.
 
 ```agda
--- Your code goes here
+*-mono⃗-≤ : ∀ (n p q : ℕ) → p ≤ q → n * p ≤ n * q
+*-mono⃗-≤ zero p q p≤q = z≤n
+*-mono⃗-≤ (suc n) p q p≤q = +-mono-≤ p q (n * p) (n * q) p≤q (*-mono⃗-≤ n p q p≤q)
+
+*-mono⃖-≤ : ∀ (m n p : ℕ) → m ≤ n → m * p ≤ n * p
+*-mono⃖-≤ m n p m≤n rewrite *-comm m p | *-comm n p = *-mono⃗-≤ p m n m≤n
+
+*-mono-≤ : ∀ (m n p q : ℕ) → m ≤ n → p ≤ q → m * p ≤ n * q
+*-mono-≤ m n p q m≤n p≤q = ≤-trans (*-mono⃖-≤ m n p m≤n) (*-mono⃗-≤ n p q p≤q)
 ```
 
 
@@ -600,7 +613,9 @@ Show that strict inequality is transitive. Use a direct proof. (A later
 exercise exploits the relation between < and ≤.)
 
 ```agda
--- Your code goes here
+<-trans : ∀ {m n p : ℕ} → m < n → n < p → m < p
+<-trans z<s (s<s n<p) = z<s
+<-trans (s<s m<n) (s<s n<p) = s<s (<-trans m<n n<p)
 ```
 
 #### Exercise `trichotomy` (practice) {#trichotomy}
@@ -618,7 +633,20 @@ similar to that used for totality.
 [negation](/Negation/).)
 
 ```agda
--- Your code goes here
+data Trichotomy (m n : ℕ) : Set where
+  t-m<n : m < n → Trichotomy m n
+  t-m≡n : m ≡ n → Trichotomy m n
+  t-m>n : n < m → Trichotomy m n
+
+<-Trichotomy : ∀ (m n : ℕ) → Trichotomy m n
+<-Trichotomy zero zero = t-m≡n refl
+<-Trichotomy zero (suc n) = t-m<n z<s
+<-Trichotomy (suc m) zero = t-m>n z<s
+<-Trichotomy (suc m) (suc n)
+  with (<-Trichotomy m n)
+... | t-m<n m<n = t-m<n (s<s m<n)
+... | t-m≡n m≡n = t-m≡n (cong suc m≡n)
+... | t-m>n n<m = t-m>n (s<s n<m)
 ```
 
 #### Exercise `+-mono-<` (practice) {#plus-mono-less}
@@ -627,7 +655,15 @@ Show that addition is monotonic with respect to strict inequality.
 As with inequality, some additional definitions may be required.
 
 ```agda
--- Your code goes here
++-monoʳ-< : ∀ (n p q : ℕ) → p < q → n + p < n + q
++-monoʳ-< zero p q p<q = p<q
++-monoʳ-< (suc n) p q p<q = s<s (+-monoʳ-< n p q p<q)
+
++-monoˡ-< : ∀ (m n p : ℕ) → m < n → m + p < n + p
++-monoˡ-< m n p m<n rewrite +-comm m p | +-comm n p = +-monoʳ-< p m n m<n
+
++-mono-< : ∀ (m n p q : ℕ) → m < n → p < q → m + p < n + q
++-mono-< m n p q m<n p<q = <-trans (+-monoˡ-< m n p m<n) (+-monoʳ-< n p q p<q)
 ```
 
 #### Exercise `≤→<, <→≤` (recommended) {#leq-iff-less}
@@ -635,7 +671,13 @@ As with inequality, some additional definitions may be required.
 Show that `suc m ≤ n` implies `m < n`, and conversely.
 
 ```agda
--- Your code goes here
+≤→< : ∀ (m n : ℕ) → suc m ≤ n → m < n
+≤→< zero (suc n) sucm≤n = z<s
+≤→< (suc m) (suc n) (s≤s sucm≤n) = s<s (≤→< m n sucm≤n)
+
+<→≤ : ∀ (m n : ℕ) → m < n → suc m ≤ n
+<→≤ zero (suc n) m<n = s≤s z≤n
+<→≤ (suc m) (suc n) (s<s m<n) = s≤s (<→≤ m n m<n)
 ```
 
 #### Exercise `<-trans-revisited` (practice) {#less-trans-revisited}
@@ -645,7 +687,16 @@ using the relation between strict inequality and inequality and
 the fact that inequality is transitive.
 
 ```agda
--- Your code goes here
+≤→<' : ∀ (m n : ℕ) → m < n → m ≤ n
+≤→<' zero (suc n) m<n = z≤n
+≤→<' (suc m) (suc n) (s<s m<n) = s≤s (≤→<' m n m<n)
+
+<-trans-revisited : ∀ {m n p : ℕ} → m < n → n < p → m < p
+<-trans-revisited {m} {n} {p} m<n n<p =
+  ≤→< m p sucm≤p
+  where
+  sucm≤p : suc m ≤ p
+  sucm≤p = ≤-trans (<→≤ m n m<n) (≤→<' n p n<p)
 ```
 
 
@@ -752,7 +803,16 @@ successor of the sum of two even numbers, which is even.
 Show that the sum of two odd numbers is even.
 
 ```agda
--- Your code goes here
++suc : ∀ (m n : ℕ) → suc (m + n) ≡ m + suc n
++suc m n rewrite +-comm m n | +-comm m (suc n) = refl
+
+o+o≡e : ∀ {m n : ℕ} → odd m → odd n → even (m + n)
+o+o≡e {m} {suc n} odd-m (suc even-n) = helper (suc m+n+1)
+  where
+  m+n+1 : odd (m + n)
+  m+n+1 = o+e≡o odd-m even-n
+  helper : even (suc (m + n)) → even (m + suc n)
+  helper x rewrite +suc m n = x
 ```
 
 #### Exercise `Bin-predicates` (stretch) {#Bin-predicates}
